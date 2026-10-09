@@ -502,12 +502,9 @@ class WebhookHandler
         if ($actionType === 'send_message' && ! empty($action['text'])) {
             try {
                 $processedText = $replaceVariables($action['text']);
-                $api = new WhatsAppCloudApi([
-                    'waba_id' => $account->waba_id,
-                    'phone_number_id' => $account->phone_number_id,
-                    'access_token' => $account->access_token,
-                ]);
-                $api->sendTextMessage($customerPhone, $processedText);
+                $api = new WhatsAppCloudApi;
+                $api->withToken($account->access_token);
+                $api->sendTextMessage($account->phone_number_id, $customerPhone, $processedText);
 
                 $chat = WhatsappChat::where('tenant_id', $tenant->id)
                     ->where('customer_phone', $customerPhone)

@@ -4,9 +4,11 @@ use App\Models\AutomationFlow;
 use App\Models\ContactGroup;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WhatsappAccount;
 use App\Services\WhatsApp\WebhookHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
 
@@ -244,6 +246,44 @@ test('automation condition returns the matched branch index', function () {
 
     expect($outcome['matched'])->toBeTrue()
         ->and($outcome['branch_index'])->toBe(1);
+});
+
+test('automation send message uses its WhatsApp account credentials', function () {
+    Http::preventStrayRequests();
+    Http::fake(['*' => Http::response(['messages' => [['id' => 'wamid.123']]], 200)]);
+
+    $account = WhatsappAccount::create([
+        'tenant_id' => $this->tenant->id,
+        'phone_number_id' => 'phone-number-id',
+        'access_token' => 'account-access-token',
+    ]);
+
+    $handler = new class extends WebhookHandler
+    {
+        public function executeSendMessage(array $action, Tenant $tenant, string $customerPhone, WhatsappAccount $account): void
+        {
+            $this->executeSingleAction(
+                $action,
+                $tenant,
+                $customerPhone,
+                'incoming message',
+                $account,
+                fn (string $text): string => $text,
+            );
+        }
+    };
+
+    $handler->executeSendMessage(
+        ['type' => 'send_message', 'text' => 'Automated reply'],
+        $this->tenant,
+        '+15557654321',
+        $account,
+    );
+
+    Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/phone-number-id/messages')
+        && $request['to'] === '+15557654321'
+        && $request['text']['body'] === 'Automated reply'
+        && $request->hasHeader('Authorization', 'Bearer account-access-token'));
 });
 
 test('client can toggle an automation flow status', function () {
