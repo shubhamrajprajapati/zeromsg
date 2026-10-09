@@ -49,7 +49,8 @@ class InboxController extends Controller
                     // Calculate remaining session time (in seconds) based on the last inbound message
                     $lastInbound = $chat->messages()
                         ->where('direction', 'inbound')
-                        ->latest('sent_at')
+                        ->reorder()
+                        ->orderByRaw('COALESCE(sent_at, created_at) DESC')
                         ->first();
 
                     $sessionRemaining = null;
@@ -105,7 +106,8 @@ class InboxController extends Controller
 
         $lastInbound = $chat->messages()
             ->where('direction', 'inbound')
-            ->latest('sent_at')
+            ->reorder()
+            ->orderByRaw('COALESCE(sent_at, created_at) DESC')
             ->first();
         $sessionRemaining = 0;
 
@@ -148,7 +150,8 @@ class InboxController extends Controller
         if ($type === 'text') {
             $lastInbound = $chat->messages()
                 ->where('direction', 'inbound')
-                ->latest('sent_at')
+                ->reorder()
+                ->orderByRaw('COALESCE(sent_at, created_at) DESC')
                 ->first();
 
             $isSessionOpen = false;

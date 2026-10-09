@@ -96,7 +96,7 @@ test('inbox allows text message if inbound message is within 24 hours (session o
 });
 
 test('a new inbound webhook message reopens the text session after 24 hours', function () {
-    $this->chat->messages()->create([
+    $oldInbound = $this->chat->messages()->create([
         'direction' => 'inbound',
         'message_type' => 'text',
         'body' => 'Earlier message',
@@ -104,6 +104,8 @@ test('a new inbound webhook message reopens the text session after 24 hours', fu
         'status' => 'delivered',
         'sent_at' => now()->subHours(25),
     ]);
+    $oldInbound->created_at = now()->subDays(2);
+    $oldInbound->saveQuietly();
 
     $handler = new WebhookHandler;
     $handler->handle([
