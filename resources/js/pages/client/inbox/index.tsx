@@ -194,6 +194,10 @@ export default function InboxIndex({
     templates = [],
 }: InboxProps) {
     const [selectedChat, setSelectedChat] = React.useState<Chat | null>(null);
+    const selectedChatSessionRef = React.useRef<{
+        id: number;
+        isSessionOpen?: boolean;
+    } | null>(null);
     const [messages, setMessages] = React.useState<Message[]>([]);
     const [newMessage, setNewMessage] = React.useState('');
     const [searchQuery, setSearchQuery] = React.useState('');
@@ -218,6 +222,10 @@ export default function InboxIndex({
     /* eslint-enable react-hooks/purity */
 
     const handleSelectChat = (chat: Chat) => {
+        selectedChatSessionRef.current = {
+            id: chat.id,
+            isSessionOpen: chat.is_session_open,
+        };
         setSelectedChat(chat);
         setMode(chat.is_session_open ? 'text' : 'template');
         setSelectedTemplateId('');
@@ -241,8 +249,38 @@ export default function InboxIndex({
             );
 
             if (res.ok) {
-                const data = await res.json();
-                setMessages(data);
+                const data: {
+                    messages: Message[];
+                    session_remaining: number;
+                    is_session_open: boolean;
+                } = await res.json();
+                setMessages(data.messages);
+
+                const currentSelectedChat = selectedChatSessionRef.current;
+
+                if (currentSelectedChat?.id === chatId) {
+                    if (
+                        currentSelectedChat.isSessionOpen !==
+                        data.is_session_open
+                    ) {
+                        setMode(data.is_session_open ? 'text' : 'template');
+                    }
+
+                    selectedChatSessionRef.current = {
+                        id: chatId,
+                        isSessionOpen: data.is_session_open,
+                    };
+                }
+
+                setSelectedChat((currentChat) =>
+                    currentChat?.id === chatId
+                        ? {
+                              ...currentChat,
+                              session_remaining: data.session_remaining,
+                              is_session_open: data.is_session_open,
+                          }
+                        : currentChat,
+                );
             }
         } catch {
             toast.error('An error occurred. Please try again.');

@@ -103,7 +103,22 @@ class InboxController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
-        return response()->json($messages);
+        $lastInbound = $chat->messages()
+            ->where('direction', 'inbound')
+            ->latest('sent_at')
+            ->first();
+        $sessionRemaining = 0;
+
+        if ($lastInbound) {
+            $sentAt = $lastInbound->sent_at ?? $lastInbound->created_at;
+            $sessionRemaining = max(0, (int) (86400 - now()->diffInSeconds($sentAt)));
+        }
+
+        return response()->json([
+            'messages' => $messages,
+            'session_remaining' => $sessionRemaining,
+            'is_session_open' => $sessionRemaining > 0,
+        ]);
     }
 
     /**

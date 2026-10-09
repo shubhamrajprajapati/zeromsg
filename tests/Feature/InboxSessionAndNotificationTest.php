@@ -95,6 +95,58 @@ test('inbox allows text message if inbound message is within 24 hours (session o
     ]);
 });
 
+test('a new inbound webhook message reopens the text session after 24 hours', function () {
+    $this->chat->messages()->create([
+        'direction' => 'inbound',
+        'message_type' => 'text',
+        'body' => 'Earlier message',
+        'meta_message_id' => 'msg-inbound-old',
+        'status' => 'delivered',
+        'sent_at' => now()->subHours(25),
+    ]);
+
+    $handler = new WebhookHandler;
+    $handler->handle([
+        'entry' => [[
+            'changes' => [[
+                'field' => 'messages',
+                'value' => [
+                    'metadata' => ['phone_number_id' => 'phone-123'],
+                    'messages' => [[
+                        'from' => '15559999',
+                        'id' => 'msg-inbound-new',
+                        'timestamp' => (string) now()->getTimestamp(),
+                        'type' => 'text',
+                        'text' => ['body' => 'Hello again'],
+                    ]],
+                ],
+            ]],
+        ]],
+    ]);
+
+    $this->actingAs($this->user)
+        ->getJson(route('client.inbox.messages', $this->chat))
+        ->assertOk()
+        ->assertJsonPath('is_session_open', true)
+        ->assertJsonPath('messages.1.meta_message_id', 'msg-inbound-new');
+
+    $whatsAppApi = $this->mock(WhatsAppCloudApi::class);
+    $whatsAppApi->shouldReceive('sendTextMessage')
+        ->once()
+        ->with('phone-123', '+15559999', 'Welcome back')
+        ->andReturn(new Illuminate\Http\Client\Response(
+            new Response(200, [], json_encode(['messages' => [['id' => 'wamid-outbound-reopened']]]))
+        ));
+
+    $response = $this->actingAs($this->user)
+        ->postJson(route('client.inbox.send', $this->chat), [
+            'type' => 'text',
+            'body' => 'Welcome back',
+        ]);
+
+    $response->assertOk();
+});
+
 test('campaign completed with failures creates a system notification', function () {
     $campaign = Campaign::create([
         'tenant_id' => $this->tenant->id,
